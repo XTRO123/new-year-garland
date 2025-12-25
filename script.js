@@ -33,11 +33,11 @@ class Buffer {
     request.open('get', url, true);
     request.responseType = 'arraybuffer';
     let thisBuffer = this;
-    request.onload = function() {
+    request.onload = function () {
       thisBuffer.context
-        .decodeAudioData(request.response, function(buffer) {
+        .decodeAudioData(request.response, function (buffer) {
           thisBuffer.buffer[index] = buffer;
-          if(index == thisBuffer.urls.length-1) {
+          if (index == thisBuffer.urls.length - 1) {
             thisBuffer.loaded();
           }
         });
@@ -58,8 +58,8 @@ class Buffer {
 }
 
 let balls = null,
-    preset = 0,
-    loaded = false;
+  preset = 0,
+  loaded = false;
 let path = 'audio/';
 let sounds = [
   path + 'sound1.mp3',
@@ -99,20 +99,101 @@ let sounds = [
   path + 'sound35.mp3',
   path + 'sound36.mp3'
 ];
-let context = new (window.AudioContext || window.webkitAudioContext)();
+
+// Создаем AudioContext только после первого взаимодействия пользователя
+let context = null;
+let buffer = null;
+
+function initAudioContext() {
+  if (!context) {
+    try {
+      // Поддержка всех браузеров
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) {
+        console.error('Web Audio API не поддерживается в этом браузере');
+        return false;
+      }
+      context = new AudioContext();
+      buffer = new Buffer(context, sounds);
+      buffer.getBuffer();
+
+      // Возобновляем контекст сразу после создания
+      if (context.state === 'suspended') {
+        context.resume();
+      }
+
+      return true;
+    } catch (e) {
+      console.error('Ошибка инициализации AudioContext:', e);
+      return false;
+    }
+  }
+  return true;
+}
 
 function playBalls() {
+  if (!initAudioContext()) {
+    return;
+  }
+
+  // Возобновляем контекст если нужно
+  if (context.state === 'suspended') {
+    context.resume();
+  }
+
+  // Проверяем, что буфер загружен
+  if (!loaded || !buffer) {
+    console.warn('Аудио еще загружается...');
+    return;
+  }
+
   let index = parseInt(this.dataset.note) + preset;
-  balls = new Balls(context, buffer.getSound(index));
-  balls.play();
+  const soundBuffer = buffer.getSound(index);
+
+  if (!soundBuffer) {
+    console.warn('Звук еще не загружен');
+    return;
+  }
+
+  try {
+    balls = new Balls(context, soundBuffer);
+    balls.play();
+  } catch (e) {
+    console.error('Ошибка воспроизведения:', e);
+  }
 }
 
 function stopBalls() {
-  balls.stop();
+  if (balls) {
+    try {
+      balls.stop();
+    } catch (e) {
+      console.error('Ошибка остановки звука:', e);
+    }
+  }
 }
 
-let buffer = new Buffer(context, sounds);
-let ballsSound = buffer.getBuffer();
+// Обработчик кнопки запуска
+document.addEventListener('DOMContentLoaded', function () {
+  const startButton = document.getElementById('startButton');
+  const startOverlay = document.getElementById('startOverlay');
+
+  if (startButton && startOverlay) {
+    startButton.addEventListener('click', function () {
+      // Инициализируем аудио контекст
+      if (initAudioContext()) {
+        console.log('Аудио контекст инициализирован');
+        // Скрываем оверлей
+        startOverlay.classList.add('hidden');
+        // Удаляем оверлей из DOM через 500мс (после анимации)
+        setTimeout(() => {
+          startOverlay.remove();
+        }, 500);
+      }
+    });
+  }
+});
+
 let buttons = document.querySelectorAll('.b-ball_bounce');
 buttons.forEach(button => {
   button.addEventListener('mouseenter', playBalls.bind(button));
@@ -122,12 +203,12 @@ buttons.forEach(button => {
 function ballBounce(e) {
   var i = e;
   if (e.className.indexOf(" bounce") > -1) {
-  return;
+    return;
   }
   toggleBounce(i);
 }
 
-function toggleBounce(i){
+function toggleBounce(i) {
   i.classList.add("bounce");
   function n() {
     i.classList.remove("bounce")
@@ -153,14 +234,14 @@ function toggleBounce(i){
 var array1 = document.querySelectorAll('.b-ball_bounce')
 var array2 = document.querySelectorAll('.b-ball_bounce .b-ball__right')
 
-for(var i=0; i<array1.length; i++){
-  array1[i].addEventListener('mouseenter', function(){
+for (var i = 0; i < array1.length; i++) {
+  array1[i].addEventListener('mouseenter', function () {
     ballBounce(this)
   })
 }
 
-for(var i=0; i<array2.length; i++){
-  array2[i].addEventListener('mouseenter', function(){
+for (var i = 0; i < array2.length; i++) {
+  array2[i].addEventListener('mouseenter', function () {
     ballBounce(this)
   })
 }
@@ -169,19 +250,47 @@ let l = ["49", "50", "51", "52", "53", "54", "55", "56", "57", "48", "189", "187
 let k = ["90", "88", "67", "86", "66", "78", "77", "188", "190", "191"];
 let a = {};
 for (let e = 0, c = l.length; e < c; e++) {
-    a[l[e]] = e
+  a[l[e]] = e
 }
 for (let e = 0, c = k.length; e < c; e++) {
-    a[k[e]] = e
+  a[k[e]] = e
 }
 
 document.addEventListener('keydown', function (j) {
   let i = j.target;
   if (j.which in a) {
+    if (!initAudioContext()) {
+      return;
+    }
+
+    // Возобновляем контекст если нужно
+    if (context.state === 'suspended') {
+      context.resume();
+    }
+
+    // Проверяем, что буфер загружен
+    if (!loaded || !buffer) {
+      console.warn('Аудио еще загружается...');
+      return;
+    }
+
     let index = parseInt(a[j.which]);
-    balls = new Balls(context, buffer.getSound(index));
-    balls.play();
-    let ball = document.querySelector('[data-note="' + index + '"]');
-    toggleBounce(ball);
+    const soundBuffer = buffer.getSound(index);
+
+    if (!soundBuffer) {
+      console.warn('Звук еще не загружен');
+      return;
+    }
+
+    try {
+      balls = new Balls(context, soundBuffer);
+      balls.play();
+      let ball = document.querySelector('[data-note="' + index + '"]');
+      if (ball) {
+        toggleBounce(ball);
+      }
+    } catch (e) {
+      console.error('Ошибка воспроизведения:', e);
+    }
   }
 });
